@@ -1,10 +1,24 @@
+const notifyMissingDrinkMock = jest.fn()
+const isEmptyMock = jest.fn()
+
 import { DrinkMaker, Order } from '../src/index'
+
+jest.mock('../src/services', () => ({
+    EmailNotifier: {
+        notifyMissingDrink: notifyMissingDrinkMock
+    },
+    BeverageQuantityChecker: {
+        isEmpty: isEmptyMock
+    },
+}))
 
 describe('Order', () => {
     let drinkMaker
     beforeEach(() => {
         drinkMaker = new DrinkMaker()
+        DrinkMaker.message = ''
         Order.resetReport()
+        jest.clearAllMocks()
     })
 
     it('should display order detail', () => {
@@ -131,6 +145,50 @@ describe('Order', () => {
             expect(Order.Report.teaAmount).toEqual(0)
             expect(Order.Report.chocolateAmount).toEqual(1)
             expect(Order.Report.orangeAmount).toEqual(1)
+        })
+    })
+
+    describe('Shortage', () => {
+        it('should be alerted and send an email when happen', () => {
+            isEmptyMock.mockReturnValue(true)
+            drinkMaker.order('C::', 0.6)
+            expect(DrinkMaker.message).toEqual('Run out of coffee')
+            expect(notifyMissingDrinkMock).toHaveBeenCalledTimes(1)
+            expect(notifyMissingDrinkMock).toHaveBeenCalledWith('coffee')
+        })
+
+        it('should send email for every shortage', () => {
+            isEmptyMock.mockReturnValue(true)
+            drinkMaker.order('C::', 0.6)
+            drinkMaker.order('Hh::', 0.5)
+            expect(notifyMissingDrinkMock).toHaveBeenCalledTimes(2)
+            expect(notifyMissingDrinkMock).toHaveBeenCalledWith('coffee')
+            expect(notifyMissingDrinkMock).toHaveBeenCalledWith('chocolate')
+        })
+
+        it('should not be alerted if payment doesnt go through', () => {
+            isEmptyMock.mockReturnValue(true)
+            drinkMaker.order('C::', 0.3)
+            expect(DrinkMaker.message).not.toEqual('Run out of coffee')
+            expect(notifyMissingDrinkMock).not.toHaveBeenCalled()
+        })
+
+        it('should not influence other drink types', () => {
+            isEmptyMock.mockImplementation((drink: string) => {
+                return {
+                    'coffee': true,
+                }[drink] || false
+            })
+            drinkMaker.order('T::', 0.4)
+            expect(DrinkMaker.message).toEqual('T::')
+            expect(notifyMissingDrinkMock).not.toHaveBeenCalled()
+        })
+
+        it('should not be alerted nor send an email when not happen', () => {
+            isEmptyMock.mockReturnValue(false)
+            drinkMaker.order('C::', 0.6)
+            expect(DrinkMaker.message).toEqual('C::')
+            expect(notifyMissingDrinkMock).not.toHaveBeenCalled()
         })
     })
 

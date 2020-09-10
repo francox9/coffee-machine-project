@@ -1,3 +1,7 @@
+import { EmailNotifier, BeverageQuantityChecker } from './services'
+const { notifyMissingDrink } = EmailNotifier
+const { isEmpty } = BeverageQuantityChecker
+
 type OrderType = 'coffee' | 'tea' | 'chocolate' | 'message' | 'orange'
 interface DailyReport {
     money: number
@@ -29,6 +33,9 @@ export class Order {
         if (/^\wh$/.test(drinkDesc)) this.extraHot = true
         const type = drinkDesc[0]
         
+        /**
+         * this part can/should be optimised
+         */
         switch (type) {
             case 'M': {
                 this.value = 0
@@ -41,6 +48,7 @@ export class Order {
                 if (payment < 0.4) throw new Error('payment-insufficient')
                 this.value = 0.4
                 this.type = 'tea'
+                if (isEmpty(this.type)) throw new Error('tea_run-out')
                 this.sugar = parseInt(amounts[0]) || 0
                 this.stick = this.sugar > 0? 1: 0
                 Order.Report.teaAmount++
@@ -50,6 +58,7 @@ export class Order {
                 if (payment < 0.5) throw new Error('payment-insufficient')
                 this.value = 0.5
                 this.type = 'chocolate'
+                if (isEmpty(this.type)) throw new Error('chocolate_run-out')
                 this.sugar = parseInt(amounts[0]) || 0
                 this.stick = this.sugar > 0? 1: 0
                 Order.Report.chocolateAmount++
@@ -59,6 +68,7 @@ export class Order {
                 if (payment < 0.6) throw new Error('payment-insufficient')
                 this.value = 0.6
                 this.type = 'coffee'
+                if (isEmpty(this.type)) throw new Error('coffee_run-out')
                 this.sugar = parseInt(amounts[0]) || 0
                 this.stick = this.sugar > 0? 1: 0
                 Order.Report.coffeeAmount++
@@ -68,6 +78,7 @@ export class Order {
                 if (payment < 0.6) throw new Error('payment-insufficient')
                 this.value = 0.6
                 this.type = 'orange'
+                if (isEmpty(this.type)) throw new Error('orange_run-out')
                 this.sugar = parseInt(amounts[0]) || 0
                 this.stick = this.sugar > 0 ? 1 : 0
                 Order.Report.orangeAmount++
@@ -90,8 +101,15 @@ export class DrinkMaker {
             DrinkMaker.message = instruction
         }
         catch(e) {
-            if (e.message === 'payment-insufficient') DrinkMaker.message = 'Payment not enough'
-            else if (e.message === 'undefined-drink') DrinkMaker.message = 'Undefined drink type'
+            let message = null
+            if (e.message === 'payment-insufficient') message = 'Payment not enough'
+            else if (e.message === 'undefined-drink') message = 'Undefined drink type'
+            else if (e.message.endsWith('_run-out') ) {
+                const drink = e.message.slice(0, -8)
+                message = 'Run out of ' + drink
+                notifyMissingDrink(drink)
+            }
+            DrinkMaker.message = message || 'Unknown error'
         }
         return order
     }
